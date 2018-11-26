@@ -42,5 +42,5 @@ git clone https://github.com/fredvaz/bluerov2.git
 
 ## License
 
-BlueROV2 package is open-sourced under the GNU General Public License v3.0. See the
+Self Balancing Robot package is open-sourced under the GNU General Public License v3.0. See the
 [LICENSE](LICENSE) file for details.
