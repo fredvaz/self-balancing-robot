@@ -14,9 +14,9 @@ This repository contains the firmware, PID Tunning on Simulink and ROS Navigatio
 ## Hardware
 
 - Arduino MEGA 2560
+- Raspberry Pi 3/B+
 - MPU6050 IMU
 - A4988 Stepper Motor Drive
-- Raspberry Pi 3/B+
 
 
 ## Dependencies
