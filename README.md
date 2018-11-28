@@ -24,6 +24,9 @@ This repository contains the firmware, PID Tunning on Simulink and ROS Navigatio
 - git
 - [Arduino](https://www.arduino.cc/en/Main/Software)
 - [ROS](http://wiki.ros.org/kinetic/Installation)
+- To Run the PID calibration:
+  - [MATLAB](https://www.mathworks.com/products/matlab.html)
+  - [Simulink](https://www.mathworks.com/products/simulink.html)
 
 
 ## Installation 
