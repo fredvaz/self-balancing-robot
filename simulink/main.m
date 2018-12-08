@@ -46,7 +46,7 @@ p1 = poles(1); p2 = poles(2);
 
 %%                       Controller Parameters 
 
-h = 5e-3;
+h = 10e-3;
 
 Pertub = 1;
 k_pertub = 1;
@@ -54,9 +54,9 @@ t_pertub = 5;
 
 k_noise = 1;
 
-kp = 497;
-ki = 180;
-kd = 40;
+kp = 0.1; %0.32;
+ki = 0.0; 
+kd = 0.01; %0.05;
 
 
 %% TESTES
@@ -85,6 +85,49 @@ grid on
 % F = 1; N = 1; P = 1; 
 
 
+
+%% Arduino
+
+% Arduino hardware connection
+%Arduino = arduino('/dev/cu.usbmodem1411', 'Mega2560');
+global Serial sol
+
+% create serial communication object
+Serial = serial('/dev/ttyACM0'); % , 'BaudRate', 115200
+set(Serial,'DataBits', 8);
+set(Serial,'StopBits', 1);
+set(Serial,'BaudRate', 115200);
+set(Serial,'Parity', 'none');
+
+% initiate arduino communication
+%fopen(Serial);
+%pause(5);
+
+%% Read
+
+fopen(Serial);
+
+data = uint8(fread(Serial, 2));
+
+data = swapbytes(typecast(uint8(data), 'int16'))
+
+fclose(Serial);
+
+%% Write
+fopen(Serial);
+
+data = 88;
+
+fwrite(Serial, uint8(data), 'uint8')
+
+fclose(Serial);
+
+%% Close 
+
+fclose(Serial);
+delete(Serial);
+clear Serial;
+clc;
 
 
 
