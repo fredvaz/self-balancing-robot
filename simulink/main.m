@@ -148,7 +148,8 @@ kd = 1200.0;
 % nos 1º testes era a indutânica grande que afectava em grande a rapidez 
 % da resposta
 
-
+plot(T)
+grid on
 
 
 
