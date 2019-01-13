@@ -46,7 +46,7 @@ J = 0.005;   %
 B = 0.05;    % 
 N = 10;      % 10, 1
 
-%Kt = 0.63/2;                   % Kt is the Motor Torque Constant (N·m/A) (holding torque)
+%Kt = 0.63/2;                   % Kt is the Motor Torque Constant (Nï¿½m/A) (holding torque)
 %Km = Kt/srqt(Ra);
 %Ia = T/Kt;                     % Ia is the armature current of the machine (SI units A), T is the torque
 
@@ -61,10 +61,10 @@ p1 = poles(1); p2 = poles(2);
 % Robot Parameters
 l = 0.10;          % distance between robot chassis gravity center and axle
 m = 0.05;          % wheel's mass
-M = 1.5;           % robot chassis mass
+M = 1.2;           % robot chassis mass
 r = 0.12;          % radius of the wheel's
 b = 0.003;         % wheel's friction force
-I = 1.0;           % robot chassis rotational inertia
+I = 0.0125;        % robot chassis rotational inertia
 g = 9.8;           % gravitational force
 
 % Motors Parameters - Nema 17 equivalent
@@ -80,7 +80,7 @@ max_torque = 0.45;
 
 % ^ 12V, 2A ~ 0.45 Nm @ 150 rpm (500 steps/2)
 
-%Kt = 0.63/2;                   % Kt is the Motor Torque Constant (N·m/A) (holding torque)
+%Kt = 0.63/2;                   % Kt is the Motor Torque Constant (Nï¿½m/A) (holding torque)
 %Km = Kt/sqrt(Ra);
 %Ia = T/Kt;                     % Ia is the armature current of the machine (SI units A), T is the torque
 
@@ -121,35 +121,93 @@ kd = 1200.0;
 
 %% NOTAS:
 
-% Usar um Motor DC equivale a fazer o controlo por tensão, na realidade
+% Usar um Motor DC equivale a fazer o controlo por tensï¿½o, na realidade
 % corresponde ao controlo de um PWM do Driver
 
-% O Stepper Motor exige um controlo por steps, onde a tensão e corrente são
+% O Stepper Motor exige um controlo por steps, onde a tensï¿½o e corrente sï¿½o
 % constantes, produzindo um determinado torque a determinada velocidade
 % rpms ou steps/s
 
-% O torque define-se como Nm (Newton metro), que corresponde a força em
-% Newton por um ponto de aplicação a 1m. Ora o raio das rodas corresponde
-% ao nosso ponto de aplicação com a superficie. Portanto divide-se Nm por r
-% correspondente ao radio das rodas para obter a força
+% O torque define-se como Nm (Newton metro), que corresponde a forï¿½a em
+% Newton por um ponto de aplicaï¿½ï¿½o a 1m. Ora o raio das rodas corresponde
+% ao nosso ponto de aplicaï¿½ï¿½o com a superficie. Portanto divide-se Nm por r
+% correspondente ao radio das rodas para obter a forï¿½a
 
-% Quanta força (Nm) é necessária para contrabalancear o sistema? 
+% Quanta forï¿½a (Nm) ï¿½ necessï¿½ria para contrabalancear o sistema? 
 % Configurar/escolher motor para gerar um torque suficiente
 
-% O controlo do motor do paper está gerar enorme tensão fora do normal, pois
-% a exigência de torque é grande mas funciona!
+% O controlo do motor do paper estï¿½ gerar enorme tensï¿½o fora do normal, pois
+% a exigï¿½ncia de torque ï¿½ grande mas funciona!
 
-% Force = Torque ÷ [Length × sin (Angle)], converts torque into force
+% Force = Torque ï¿½ [Length ï¿½ sin (Angle)], converts torque into force
 % In the equation, Angle is the angle at which the force acts on the lever 
 % arm, where 90 degrees signifies direct application.
 
 % As vezes o controlador pode nunca conseguir a estabilidade devidos as 
-% características dos motores/sem potência suficiente por exemplo
-% nos 1º testes era a indutânica grande que afectava em grande a rapidez 
+% caracterï¿½sticas dos motores/sem potï¿½ncia suficiente por exemplo
+% nos 1ï¿½ testes era a indutï¿½nica grande que afectava em grande a rapidez 
 % da resposta
 
 plot(T)
 grid on
+
+
+%%
+clear all
+clc
+ 
+syms Va As s La Ra mw mc g l r b km kb
+
+equation = Va == r*(La*s + Ra)*((mw + mc)*(g/s^2 - mc*l)*As*s^2 ...
+               + b*(g/s^2 - mc*l)*As*s + mc*l*As*s^2)/km + (kb*(g/s^2 - mc*l)*s)/r;
+
+% Coloca em ordem a As
+x = collect(equation, As)
+
+As_ = solve(x, As)
+Va_ = solve(x, Va)
+
+sol = simplify( As_ / Va_)
+
+% Coloca em ordem a Va
+%y = collect(equation, Va)
+
+% x = solve(x, As/Va)
+% x = simplify(x)
+% x = isolate(equation, As)
+
+%% 
+clear all
+clc
+
+syms Va As s La Ra mw mc g l r b km kb
+
+
+s = (km*r - kb*(g/s^2 - mc*l)*s)/(r^2*(La*s + Ra)*((mw + mc)*(g/s^2 - mc*l)*s^2 ...
+                                 + b*(g/s^2 - mc*l)*s + mc*l*s^2))
+
+s = simplify(s)
+
+sol = subs(s, [La Ra mw mc g l r b km kb], [0.001 3.0 0.05 1.5 9.8 0.12 0.11 0.003 0.25 0.2])
+
+sol = simplify(sol)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
