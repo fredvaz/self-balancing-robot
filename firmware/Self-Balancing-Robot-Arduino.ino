@@ -35,11 +35,42 @@ void setup()
 
     Serial.begin(115200); // Serial output to console
     Serial1.begin(115200);
+
+    // Initialize I2C bus (MPU6050 is connected via I2C)
+    Wire.begin();
+
+    //
+
+    // Serial.println("JJROBOTS");
+    delay(200);
+    // Serial.println("Don't move for 10 sec...");
+    MPU6050_setup(); // setup MPU6050 IMU
+    delay(500);
+
+    // Calibrate gyros
+    MPU6050_calibrate();
 }
 
 // MAIN LOOP
 void loop()
 {
 
+    // New IMU data? CONTROL LOOP
+    if (MPU6050_newData())
+    {
+        MPU6050_read_3axis();
+        loop_counter++;
+        slow_loop_counter++;
+        dt = (timer_value - timer_old) * 0.000001; // dt in seconds
+        // dt = (timer_value - timer_old) * 0.001; // dt in seconds - ADDED
+        timer_old = timer_value;
 
+        angle_adjusted_Old = angle_adjusted;
+        // Get new orientation angle from IMU (MPU6050)
+        float MPU_sensor_angle = MPU6050_getAngle(dt);
+        angle_adjusted = MPU_sensor_angle + angle_offset;
+        if ((MPU_sensor_angle > -15) && (MPU_sensor_angle < 15))
+            angle_adjusted_filtered = angle_adjusted_filtered * 0.99 + MPU_sensor_angle * 0.01;
+
+    } // End of new IMU data
 }
