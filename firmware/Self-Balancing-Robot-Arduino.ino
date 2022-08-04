@@ -21,6 +21,27 @@
 // The output of the control (motors speed) is integrated so it´s really an acceleration not an speed.
 
 // INITIALIZATION
+
+boolean positionControlMode = false;
+uint8_t mode; // mode = 0 Normal mode, mode = 1 Pro mode (More agressive)
+
+int16_t motor1;
+int16_t motor2;
+
+// position control
+volatile int32_t steps1;
+volatile int32_t steps2;
+int32_t target_steps1;
+int32_t target_steps2;
+int16_t motor1_control;
+int16_t motor2_control;
+
+int16_t speed_M1, speed_M2; // Actual speed of motors
+int8_t dir_M1, dir_M2;      // Actual direction of steppers motors
+int16_t actual_robot_speed; // overall robot speed (measured from steppers speed)
+int16_t actual_robot_speed_Old;
+float estimated_speed_filtered; // Estimated robot speed
+
 void setup()
 {
     // STEPPER PINS ON JJROBOTS BROBOT BRAIN BOARD
@@ -49,6 +70,29 @@ void setup()
 
     // Calibrate gyros
     MPU6050_calibrate();
+
+    // STEPPER MOTORS INITIALIZATION
+    // Serial.println("Steppers init");
+    //  MOTOR1 => TIMER1
+    TCCR1A = 0;                          // Timer1 CTC mode 4, OCxA,B outputs disconnected
+    TCCR1B = (1 << WGM12) | (1 << CS11); // Prescaler=8, => 2Mhz
+    OCR1A = ZERO_SPEED;                  // Motor stopped
+    dir_M1 = 0;
+    TCNT1 = 0;
+
+    // MOTOR2 => TIMER3
+    TCCR3A = 0;                          // Timer3 CTC mode 4, OCxA,B outputs disconnected
+    TCCR3B = (1 << WGM32) | (1 << CS31); // Prescaler=8, => 2Mhz
+    OCR3A = ZERO_SPEED;                  // Motor stopped
+    dir_M2 = 0;
+    TCNT3 = 0;
+    delay(200);
+
+    // Enable stepper drivers and TIMER interrupts
+    digitalWrite(4, LOW); // Enable stepper drivers
+    // Enable TIMERs interrupts
+    TIMSK1 |= (1 << OCIE1A); // Enable Timer1 interrupt
+    TIMSK3 |= (1 << OCIE1A); // Enable Timer1 interrupt
 }
 
 // MAIN LOOP
@@ -71,6 +115,26 @@ void loop()
         angle_adjusted = MPU_sensor_angle + angle_offset;
         if ((MPU_sensor_angle > -15) && (MPU_sensor_angle < 15))
             angle_adjusted_filtered = angle_adjusted_filtered * 0.99 + MPU_sensor_angle * 0.01;
+
+        if (positionControlMode)
+        {
+            // POSITION CONTROL. INPUT: Target steps for each motor. Output: motors speed
+            motor1_control = positionPDControl(steps1, target_steps1, Kp_position, Kd_position, speed_M1);
+            motor2_control = positionPDControl(steps2, target_steps2, Kp_position, Kd_position, speed_M2);
+
+            // Convert from motor position control to throttle / steering commands
+            throttle = (motor1_control + motor2_control) / 2;
+            throttle = constrain(throttle, -190, 190);
+            steering = motor2_control - motor1_control;
+            steering = constrain(steering, -50, 50);
+        }
+
+        // ROBOT SPEED CONTROL: This is a PI controller.
+        //    input:user throttle(robot speed), variable: estimated robot speed, output: target robot angle to get the desired speed
+        target_angle = speedPIControl(dt, estimated_speed_filtered, throttle, Kp_thr, Ki_thr);
+        target_angle = constrain(target_angle, -max_target_angle, max_target_angle); // limited output
+        // TEST - ADDED
+        // target_angle = -1.0;
 
     } // End of new IMU data
 }
