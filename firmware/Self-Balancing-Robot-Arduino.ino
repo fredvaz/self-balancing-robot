@@ -22,6 +22,106 @@
 
 // INITIALIZATION
 
+#include <Wire.h>
+
+// Uncomment this line to use SIMULINK PID SIMULATION
+// #define SIMULINK
+
+// NORMAL MODE PARAMETERS (MAXIMUN SETTINGS)
+#define MAX_THROTTLE 550
+#define MAX_STEERING 140
+#define MAX_TARGET_ANGLE 14
+
+// PRO MODE = MORE AGGRESSIVE (MAXIMUN SETTINGS)
+#define MAX_THROTTLE_PRO 780    // Max recommended value: 860
+#define MAX_STEERING_PRO 260    // Max recommended value: 280
+#define MAX_TARGET_ANGLE_PRO 26 // Max recommended value: 32
+
+// Default control terms for EVO 2
+#define KP 0.32           // 0.4 //0.32 | dt 25ms = 0.8 ... 0.32
+#define KD 0.05           // 0.15 //0.050 | dt 25ms = 0.175 ... 0.05
+#define KP_THROTTLE 0.055 // 0.080, 0.01 | dt 25ms =  .... 0.107842223159323 ... 0.07
+#define KI_THROTTLE 0.025 // 0.1, 0.05 | dt 25ms = ... 0.0712804465476108 ... 0.025
+#define KP_POSITION 0.01  // 0.06
+#define KD_POSITION 0.02  // 0.45
+// #define KI_POSITION 0.02
+
+// Control gains for raiseup (the raiseup movement requiere special control parameters)
+#define KP_RAISEUP 0.1
+#define KD_RAISEUP 0.16
+#define KP_THROTTLE_RAISEUP 0 // No speed control on raiseup
+#define KI_THROTTLE_RAISEUP 0.0
+
+#define MAX_CONTROL_OUTPUT 500
+#define ITERM_MAX_ERROR 30 // Iterm windup constants for PI control
+#define ITERM_MAX 10000
+
+#define ANGLE_OFFSET 0.0 // Offset angle for balance (to compensate robot own weight distribution)
+                         // 0.0 |  dt 25ms = 1.75 .... Positico Para trás
+
+// Telemetry
+#define TELEMETRY_BATTERY 0
+#define TELEMETRY_ANGLE 0
+// #define TELEMETRY_DEBUG 1  // Dont use TELEMETRY_ANGLE and TELEMETRY_DEBUG at the same time!
+
+#define ZERO_SPEED 65535
+#define MAX_ACCEL 14 // Maximun motor acceleration (MAX RECOMMENDED VALUE: 20) (default:14)
+
+#define MICROSTEPPING 16 // 8 or 16 for 1/8 or 1/16 driver microstepping (default:16)
+
+#define DEBUG 0 // 0 = No debug info (default) DEBUG 1 for console output
+
+// AUX definitions
+#define CLR(x, y) (x &= (~(1 << y)))
+#define SET(x, y) (x |= (1 << y))
+#define RAD2GRAD 57.2957795
+#define GRAD2RAD 0.01745329251994329576923690768489
+
+String MAC; // MAC address of Wifi module
+
+uint8_t cascade_control_loop_counter = 0;
+uint8_t loop_counter;        // To generate a medium loop 40Hz
+uint8_t slow_loop_counter;   // slow loop 2Hz
+uint8_t sendBattery_counter; // To send battery status
+int16_t BatteryValue;
+
+long timer_old;
+long timer_value;
+float debugVariable;
+float dt;
+
+// Angle of the robot (used for stability control)
+float angle_adjusted;
+float angle_adjusted_Old;
+float angle_adjusted_filtered = 0.0;
+
+// Default control values from constant definitions
+float Kp = KP;
+float Kd = KD;
+float Kp_thr = KP_THROTTLE;
+float Ki_thr = KI_THROTTLE;
+float Kp_user = KP;
+float Kd_user = KD;
+float Kp_thr_user = KP_THROTTLE;
+float Ki_thr_user = KI_THROTTLE;
+float Kp_position = KP_POSITION;
+float Kd_position = KD_POSITION;
+bool newControlParameters = false;
+bool modifing_control_parameters = false;
+int16_t position_error_sum_M1;
+int16_t position_error_sum_M2;
+float errorSum;
+float thetaOld = 0;
+float setThetaOld = 0;
+float target_angle;
+int16_t throttle;
+float steering;
+float max_throttle = MAX_THROTTLE;
+float max_steering = MAX_STEERING;
+float max_target_angle = MAX_TARGET_ANGLE;
+float control_output;
+float angle_offset = ANGLE_OFFSET;
+
 boolean positionControlMode = false;
 uint8_t mode; // mode = 0 Normal mode, mode = 1 Pro mode (More agressive)
 
@@ -135,6 +235,59 @@ void loop()
         target_angle = constrain(target_angle, -max_target_angle, max_target_angle); // limited output
         // TEST - ADDED
         // target_angle = -1.0;
+
+        // The steering part from the user is injected directly to the output
+        motor1 = control_output + steering;
+        motor2 = control_output - steering;
+
+        // Limit max speed (control output)
+        motor1 = constrain(motor1, -MAX_CONTROL_OUTPUT, MAX_CONTROL_OUTPUT);
+        motor2 = constrain(motor2, -MAX_CONTROL_OUTPUT, MAX_CONTROL_OUTPUT);
+
+        int angle_ready;
+        angle_ready = 74; // Default angle
+
+        if ((angle_adjusted < angle_ready) && (angle_adjusted > -angle_ready)) // Is robot ready (upright?)
+        {
+            // NORMAL MODE
+            digitalWrite(4, LOW); // Motors enable
+            // NOW we send the commands to the motors
+            setMotorSpeedM1(motor1);
+            setMotorSpeedM2(motor2);
+        }
+        else // Robot not ready (flat), angle > angle_ready => ROBOT OFF
+        {
+            digitalWrite(4, HIGH); // Disable motors
+            setMotorSpeedM1(0);
+            setMotorSpeedM2(0);
+            errorSum = 0;    // Reset PID I term
+            Kp = KP_RAISEUP; // CONTROL GAINS FOR RAISE UP
+            Kd = KD_RAISEUP;
+            Kp_thr = KP_THROTTLE_RAISEUP;
+            Ki_thr = KI_THROTTLE_RAISEUP;
+            // RESET steps
+            steps1 = 0;
+            steps2 = 0;
+            positionControlMode = false;
+            throttle = 0;
+            steering = 0;
+        }
+
+        // Normal condition?
+        if ((angle_adjusted < 56) && (angle_adjusted > -56))
+        {
+            Kp = Kp_user; // Default user control gains
+            Kd = Kd_user;
+            Kp_thr = Kp_thr_user;
+            Ki_thr = Ki_thr_user;
+        }
+        else // We are in the raise up procedure => we use special control parameters
+        {
+            Kp = KP_RAISEUP; // CONTROL GAINS FOR RAISE UP
+            Kd = KD_RAISEUP;
+            Kp_thr = KP_THROTTLE_RAISEUP;
+            Ki_thr = KI_THROTTLE_RAISEUP;
+        }
 
     } // End of new IMU data
 }
