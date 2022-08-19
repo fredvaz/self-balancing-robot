@@ -314,7 +314,16 @@ void loop()
     Serial.println(target_angle);
 #endif
 
-    //
+    // Stability control (100Hz loop): This is a PD controller.
+    //    input: robot target angle(from SPEED CONTROL), variable: robot angle, output: Motor speed
+    //    We integrate the output (sumatory), so the output is really the motor acceleration, not motor speed.
+#ifdef SIMULINK
+    control_output += stabilityControlWithSimulink(dt, angle_adjusted, target_angle); // angle_adjusted_filtered
+    control_output = constrain(control_output, -MAX_CONTROL_OUTPUT, MAX_CONTROL_OUTPUT); // Limit max output from control
+#else
+    control_output += stabilityPDControl(dt, angle_adjusted, target_angle, Kp, Kd);
+    control_output = constrain(control_output, -MAX_CONTROL_OUTPUT, MAX_CONTROL_OUTPUT); // Limit max output from control
+#endif
 
     // The steering part from the user is injected directly to the output
     motor1 = control_output + steering;
